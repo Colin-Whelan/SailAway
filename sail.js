@@ -127,8 +127,21 @@ const ask_source = [
               resolve(response);
             }
           });
-        });        
-        console.log('Pulling template from Sailthru');
+        });   
+
+        await new Promise((resolve, reject) => {
+          fs.writeFile(`./templates/${template.name}.html`, template.content_html, function(err) {
+            if (err) {
+              reject(err);
+            }else {
+              console.log(kleur.green(`File saved: ./templates/${template.name}.html`));
+              resolve(true)
+            }
+          });
+        }); 
+
+        console.log(kleur.yellow(`ask to watch file here`));
+        
         break
       case 'push':        
         template = {
@@ -139,28 +152,7 @@ const ask_source = [
         break
     }
   }()  
-
-  // save template to file if pulling
-  await async function() {
-    if(section.value == 'pull') {
-      saveTemplateToFile(template)
-    }
-  }()
-
-
-  
 })();
-
-function saveTemplateToFile(template) {    
-  if(template.content_html && template.name) {
-    fs.writeFile(`./templates/${template.name}.html`, template.content_html, function(err) {
-      if (err) {
-        return console.log(err);
-      }
-      console.log(kleur.green(`File saved: ./templates/${template.name}.html`));
-    });
-  }
-}
 
 async function ask_whichTemplate(source) {
   let template
