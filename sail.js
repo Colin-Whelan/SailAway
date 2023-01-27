@@ -49,36 +49,79 @@ const ask_source = [
   }
 ];
 
-let source
-
 (async () => {
   const section = await prompts(ask_section);
   console.log(kleur.green(`Section: ${section.value}`));
 
-  const source = await async function() {
+  const templateSource = await async function() {
     switch (section.value) {
-      case 'test':
-        response = await prompts(ask_source);
-        return response.value
       case 'push':
         return 'local'
+      case 'test':
       case 'pull':
-        return 'pull'
+        return 'sailthru'
     }
   }()
-  console.log(kleur.green(`Source: ${source}`));
-
-  
-  console.log(source);
+  console.log(kleur.green(`Source: ${templateSource}`));
   
 
-  const template = await ask_whichTemplate(source)
-      
-  console.log(template);
+  const templateChoice = await async function() {
+    return await ask_whichTemplate(templateSource)
+  }()
+  console.log(kleur.green(`Template: ${templateChoice}`));
+
+  let template
+
+  await async function() {
+    switch (section.value) {
+      case 'test':        
+      case 'pull':
+        template = await new Promise((resolve, reject) => {
+          sailthru.getTemplate(templateChoice, (err, response) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(response);
+            }
+          });
+        });        
+        console.log('Pulling template from Sailthru');
+        break
+      case 'push':        
+        template = {
+          "name": templateChoice,
+          "content_html": await fs.readFile(`./templates/${templateChoice}`, 'utf8')
+        }        
+        console.log('Pushing template to Sailthru');
+        break
+    }
+  }()  
+
+  // save template to file if pulling
+  await async function() {
+    if(section.value == 'pull') {
+      saveTemplateToFile(template)
+    }
+  }()
+
+
   
 })();
 
+function saveTemplateToFile(template) {    
+  if(template.content_html && template.name) {
+    fs.writeFile(`./templates/${template.name}.html`, template.content_html, function(err) {
+      if (err) {
+        return console.log(err);
+      }
+      console.log(kleur.green(`File saved: ./templates/${template.name}.html`));
+    });
+  }
+}
+
 async function ask_whichTemplate(source) {
+  let template
+
   switch (source) {
     case 'local':
       const local_templates = await fs.readdir('./templates')
@@ -93,11 +136,20 @@ async function ask_whichTemplate(source) {
           initial: 0
         }
       ];
-      const response_local = await prompts(ask_local);
-      return response_local.value
+      template = await prompts(ask_local);
+      return template.value
       break
     case 'sailthru':
-      const sailthru_templates = await sailthru.apiGet('template', { format: 'json' })
+      const sailthru_templates = await new Promise((resolve, reject) => {
+        sailthru.apiGet('template', { format: 'json' }, (err, response) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(response);
+          }
+        });
+      });
+      
       const ask_sailthru = [
         {
           type: 'select',
@@ -109,8 +161,8 @@ async function ask_whichTemplate(source) {
           initial: 0
         }
       ];
-      const response_sailthru = await prompts(ask_sailthru);
-      return response_sailthru.value
+      template = await prompts(ask_sailthru);
+      return template.value
       break
     }
 }
