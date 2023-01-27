@@ -20,6 +20,9 @@ const SAILTHRU_API_SECRET = process.env.SAILTHRU_API_SECRET
 const sailthru = require('sailthru-client').createSailthruClient(SAILTHRU_API_KEY, SAILTHRU_API_SECRET);
 
 env == 'debug' ? sailthru.enableLogging() : null
+
+
+const shorthands = require('./config');
  
 
 const ask_section = [
@@ -70,11 +73,51 @@ const ask_source = [
   }()
   console.log(kleur.green(`Template: ${templateChoice}`));
 
-  let template
+  let recipients 
 
+  if(section.value == 'test') {
+    await async function() {
+      switch (section.value) {
+        case 'test':
+          const ask_recipients = [
+            {
+              type: 'text',
+              name: 'value',
+              message: 'Enter recipients (comma separated)'
+            }
+          ];
+          recipients = await prompts(ask_recipients);
+          recipients = recipients.value.split(',').map(recipient => recipient.trim())
+          console.log(kleur.green(`Recipients: ${recipients}`));
+          break
+      }
+    }()
+
+    recipients.forEach(async (email, i) => {
+        if (email in shorthands) {
+          recipients[i] = shorthands[email]
+        }
+    })
+  }
+
+
+  let options = {};
+  let template
   await async function() {
     switch (section.value) {
-      case 'test':        
+      case 'test':   
+        sailthru.multiSend(templateChoice, recipients, options, function(err, response) {
+          if (err) {
+            console.log(kleur.red("ERROR:"));        
+            console.log(err);
+          } else {        
+            console.log(kleur.green(`Sent "${templateChoice}" to ${recipients}`));  
+            
+            // if dev, log the send id
+            env == 'dev' ? console.log(kleur.cyan(`Send id: ${response.send_id}`)) : ''
+          }
+        });         
+        break       
       case 'pull':
         template = await new Promise((resolve, reject) => {
           sailthru.getTemplate(templateChoice, (err, response) => {
