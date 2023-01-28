@@ -3,7 +3,7 @@
   <img alt="Version" src="https://img.shields.io/badge/version-1.0-blue.svg?cacheSeconds=2592000" />
 </p>
 
-> Helper functions for SailThru to enable local code development with live syncing, and quickly send tests to several recipients with ease.
+> Helper functions for SailThru to enable local code development with live syncing and the ability to send tests to several recipients with ease.
 
 ## Install
 
@@ -25,6 +25,12 @@ For different SailThru environment, you can create a .env file for each. For exa
 ```sh 
 node sail [--env=dev]
 ```
+
+This will start the CLI and you will be prompted to select an option.
+
+### 
+
+
 
 ## Features
 
