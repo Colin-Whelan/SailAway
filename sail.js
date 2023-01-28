@@ -1,203 +1,439 @@
-const fs = require('fs-extra')
-const prompts = require('prompts');
-const chokidar = require('chokidar');
-const kleur = require('kleur');
-const dotenv = require('dotenv');
+import sailthru_client from "sailthru-client";
+import dotenv from "dotenv";
+import chalk from 'chalk';
+import fs, { stat } from 'fs';
+import * as EmailValidator from 'email-validator';
+import prompts from 'prompts'
+import chokidar from 'chokidar'
+import minimist from 'minimist'
 
-const env = 'dev'
+const argv = minimist(process.argv.slice(2));
 
+// set environment variables based on command line argument, or default to prod
+const env = argv.env ? argv.env.toLowerCase() : null;
+
+
+// load environment variables from .env file based on environment
 switch (env) {
-  case 'prod':
-    dotenv.config({ path: './.env.prod' });
+  case env:    
+    dotenv.config({ path: `./${env}.env` });
     break
   default:
-    dotenv.config({ path: './.env.dev' });
+    dotenv.config({ path: './.env' });
+    break
 }
 
-const SAILTHRU_API_KEY = process.env.SAILTHRU_API_KEY
-const SAILTHRU_API_SECRET = process.env.SAILTHRU_API_SECRET
-    
-const sailthru = require('sailthru-client').createSailthruClient(SAILTHRU_API_KEY, SAILTHRU_API_SECRET);
+// if a template's length is smaller than this, it's considered tiny and will throw a warning
+const tinyTemplateThreshold = 100; 
 
-env == 'debug' ? sailthru.enableLogging() : null
+const SAILTHRU_API_KEY = process.env.SAILTHRU_API_KEY;
+const SAILTHRU_API_SECRET = process.env.SAILTHRU_API_SECRET;
 
+if (SAILTHRU_API_KEY == null || SAILTHRU_API_SECRET == null) {
+  console.log(chalk.red("ERROR: Missing API Key or Secret"));
+  process.exit(0);
+}
 
-const shorthands = require('./config');
- 
+var Sailthru = sailthru_client.createSailthruClient(SAILTHRU_API_KEY, SAILTHRU_API_SECRET);
 
-const ask_section = [
-  {
-    type: 'select',
-    name: 'value',
-    message: 'Pick a section',
-    choices: [
-      { title: 'Send email test', value: 'test' },
-      { title: 'Push local code', value: 'push' },
-      { title: 'Pull Sailthru code', value: 'pull' }
-    ],
-    initial: 0
-  }
-];
+switch (env) {
+  case 'debug':
+    Sailthru.enableLogging();
+    break
+  default:
+    Sailthru.disableLogging();
+    break
+}
 
-const ask_source = [
-  {
-    type: 'select',
-    name: 'value',
-    message: 'Pick a source',
-    choices: [
-      { title: 'Local', value: 'local' },
-      { title: 'Sailthru', value: 'sailthru' }
-    ],
-    initial: 0
-  }
-];
+// add config for email addresses
+import config from './config.js'
+
+const emailShorthands = config.emails
+
+let actuallyPushed = false;
+
+let templateJson
+let templateNames = [];
 
 (async () => {
-  const section = await prompts(ask_section);
-  console.log(kleur.green(`Section: ${section.value}`));
-
-  const templateSource = await async function() {
-    switch (section.value) {
-      case 'push':
-        return 'local'
-      case 'test':
-      case 'pull':
-        return 'sailthru'
-    }
-  }()
-  console.log(kleur.green(`Source: ${templateSource}`));
-  
-
-  const templateChoice = await async function() {
-    return await ask_whichTemplate(templateSource)
-  }()
-  console.log(kleur.green(`Template: ${templateChoice}`));
-
-  let recipients 
-
-  if(section.value == 'test') {
-    await async function() {
-      switch (section.value) {
-        case 'test':
-          const ask_recipients = [
-            {
-              type: 'text',
-              name: 'value',
-              message: 'Enter recipients (comma separated)'
-            }
-          ];
-          recipients = await prompts(ask_recipients);
-          recipients = recipients.value.split(',').map(recipient => recipient.trim())
-          console.log(kleur.green(`Recipients: ${recipients}`));
-          break
+  //get template list from SailThru, needed for all commands
+  await new Promise(async (resolve, reject) => {
+    Sailthru.getTemplates(function(err, response) {
+      if (err) {
+        reject(chalk.red("ERROR: " + err));
+      } else {
+        templateJson = JSON.stringify(response);
+        response.templates.forEach(template => {
+          templateNames.push(template.name);
+        });
+        resolve(true);          
       }
-    }()
+    });
+  });
 
-    recipients.forEach(async (email, i) => {
-        if (email in shorthands) {
-          recipients[i] = shorthands[email]
+  const response = await getUserCommand();
+  
+  handleTemplateCommand(response.templateCommand, {templateJson, templateNames});
+})();
+  
+  async function getUserCommand() {
+    return await prompts([
+      {
+        type: 'autocomplete',
+        name: 'templateCommand',
+        message: 'What do you want to do?',
+        choices: [
+          { title: 'Send SailThru Test', value: 'test' },
+          { title: 'Pull SailThru code', value: 'pull'},
+          { title: 'Push your code', value: 'push'}
+        ]
+      }
+    ]);
+  }
+    
+  async function handleTemplateCommand(command, templateInfo) {    
+    let templateObject
+    let shouldWatchFile
+
+    switch (command.toLowerCase()) {
+      case "test":
+        let recipients = await ask_whichEmailToSendTo()
+
+        templateObject = await ask_whichTemplateToSend(templateInfo, 'Which template would you like to send?')
+             
+        // if not in debug mode, send email
+        env != "debug" 
+          ? sendEmail(templateObject.name, recipients)
+          : console.log(chalk.green(`!!MOCK!! Sent "${templateObject.name}" to ${recipients}`));
+           
+        break;
+      case "pull":
+        // adds option to pull all templates in the dev environment
+        if(env === "dev") {templateInfo.templateNames.push("ALL TEMPLATES")}
+
+        templateObject = await ask_whichTemplateToSend(templateInfo, 'Which template would you like to pull?')
+
+        if(templateObject.name === "ALL TEMPLATES") {
+          let confirmOverwrite = await ask_confirm('WARNING: This will overwrite any existing files in the templates folder of the same name. Continue?')
+          shouldWatchFile = await ask_confirm(`Enable file watcher? (push template to SailThru as code updates)`)
+
+          // get all templates
+          if(confirmOverwrite){
+            templateInfo.templateNames.forEach(templateName => {
+              getTemplate(templateName);
+            });
+          }          
         }
-    })
+        else{
+          shouldWatchFile = await ask_confirm(`Enable file watcher? (push template to SailThru as code updates)`)     
+          getTemplate(templateObject.name)     
+        }          
+        
+        if(shouldWatchFile){watchFilesForChanges(templateObject.name)}
+
+        break;        
+      case "push":   
+        let templateNamesOnFile = fs.readdirSync('./templates');
+        
+
+        // filter the files to get only HTML files
+        templateNamesOnFile = templateNamesOnFile.filter((file) => {
+            return file.endsWith('.html');
+        });        
+
+        // remove the file extension from the file names
+        let trimmedFileNames = templateNamesOnFile.map(fileName => fileName.replace(/\.[^/.]+$/, ""));
+
+        // sort the file names by last modified date
+        trimmedFileNames = sortByLastModifiedDate(trimmedFileNames)
+
+        // set the template list to the names of the files in the templates folder
+        templateInfo.templateNames = trimmedFileNames;
+        
+        // ask for the template to push and return any existing template info from sailthru
+        templateObject = await ask_whichTemplateToSend(templateInfo, 'These files exist in "/templates/". Which template to push?')
+
+        let overwriteConfirmation
+
+        // if the template exists in Sailthru, ask for overwrite confirmation
+        if(templateObject.template_id) {          
+          overwriteConfirmation = await ask_confirm(chalk.red(`Template already exists in SailThru. Confirm overwrite of "${templateObject.name}"?`))
+
+          // if overwrite is not confirmed, exit the program
+          if(!overwriteConfirmation) {
+            console.log(chalk.red("Push cancelled - Exiting."));
+            process.exit(0);
+          }
+        }
+
+        // if env is not debug, push the template
+        env != "debug" 
+          ? await pushTemplate(templateObject.name) 
+          : console.log(chalk.green("!!MOCK!! Pushed template to Sailthru"))
+
+        // todo: update to use promises
+        // wait for the template to be pushed before continuing
+        // not the best way to do this, but it works for now
+        while (!actuallyPushed) {
+          // Wait for a short period of time before checking again
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+         
+        shouldWatchFile = await ask_confirm(`Enable file watcher? (push template to SailThru as code updates)`)
+        if(shouldWatchFile){await watchFilesForChanges(templateObject.name)}
+        
+        break;
+      case "Exit":
+        console.log(chalk.red("Exiting"));
+        process.exit(0);
+        break;
+    }
   }
 
+  function sortByLastModifiedDate(files) {
+    // create an array to store the file name and last modified date
+    const fileData = [];
 
-  let options = {};
-  let template
-  await async function() {
-    switch (section.value) {
-      case 'test':   
-        sailthru.multiSend(templateChoice, recipients, options, function(err, response) {
-          if (err) {
-            console.log(kleur.red("ERROR:"));        
-            console.log(err);
-          } else {        
-            console.log(kleur.green(`Sent "${templateChoice}" to ${recipients}`));  
-            
-            // if dev, log the send id
-            env == 'dev' ? console.log(kleur.cyan(`Send id: ${response.send_id}`)) : ''
-          }
-        });         
-        break       
-      case 'pull':
-        template = await new Promise((resolve, reject) => {
-          sailthru.getTemplate(templateChoice, (err, response) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(response);
-            }
-          });
-        });   
-
-        await new Promise((resolve, reject) => {
-          fs.writeFile(`./templates/${template.name}.html`, template.content_html, function(err) {
-            if (err) {
-              reject(err);
-            }else {
-              console.log(kleur.green(`File saved: ./templates/${template.name}.html`));
-              resolve(true)
-            }
-          });
-        }); 
-
-        console.log(kleur.yellow(`ask to watch file here`));
-        
-        break
-      case 'push':        
-        template = {
-          "name": templateChoice,
-          "content_html": await fs.readFile(`./templates/${templateChoice}`, 'utf8')
-        }        
-        console.log('Pushing template to Sailthru');
-        break
-    }
-  }()  
-})();
-
-async function ask_whichTemplate(source) {
-  let template
-
-  switch (source) {
-    case 'local':
-      const local_templates = await fs.readdir('./templates')
-      const ask_local = [
-        {
-          type: 'select',
-          name: 'value',
-          message: 'Pick a template',
-          choices: local_templates.map(template => {
-            return { title: template, value: template }
-          }),
-          initial: 0
-        }
-      ];
-      template = await prompts(ask_local);
-      return template.value
-      break
-    case 'sailthru':
-      const sailthru_templates = await new Promise((resolve, reject) => {
-        sailthru.apiGet('template', { format: 'json' }, (err, response) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(response);
-          }
+    // loop through the files and get the last modified date
+    files.forEach((file) => {
+        const stats = fs.statSync(`./templates/${file}.html`);
+        fileData.push({
+            name: file,
+            date: stats.mtime
         });
-      });
-      
-      const ask_sailthru = [
-        {
-          type: 'select',
-          name: 'value',
-          message: 'Pick a template',
-          choices: sailthru_templates.templates.map(template => {
-            return { title: template.name, value: template.name }
-          }),
-          initial: 0
-        }
-      ];
-      template = await prompts(ask_sailthru);
-      return template.value
-      break
-    }
+    });
+
+    // sort the array by last modified date
+    fileData.sort((a, b) => {
+      return b.date - a.date;
+    });
+
+    const fileNames = fileData.map((file) => {
+      return file.name;
+    });
+
+    return fileNames;
 }
+
+  async function watchFilesForChanges(templateName) {
+    const log = console.log.bind(console);
+
+    console.log(chalk.yellow(`Watching: templates/${templateName}.html`));    
+
+    // Initialize watcher.
+    const watcher = chokidar.watch(`templates/${templateName}.html`, {
+      ignored: /(^|[\/\\])\../, // ignore dotfiles
+      persistent: true
+    });    
+    
+    // Add event listeners.
+    watcher
+    .on('change', async path => {
+      log()
+      log(chalk.yellow(`Updated: ${path} --> Pushing to Sailthru...`))
+
+      // if env is not debug, push the template
+      env != "debug" 
+        ? await pushTemplate(templateName) 
+        : console.log(chalk.green("!!MOCK!! Pushed template to Sailthru"))
+    })
+    .on('unlink', path => {
+      log(chalk.red(`${path} removed. Shutting down...`))
+      process.exit(0);
+    });
+  }
+
+  async function ask_whichEmailToSendTo() {
+    let response = await prompts([
+      {
+        type: 'text',
+        name: 'emails',
+        message: `What emails to send to? (separate by comma)`
+      }
+    ]);
+    let emails = response.emails.replace(' ', '')
+    
+    emails = emails.split(",");  
+            
+    emails.forEach(async (email, i) => {
+      if (email in emailShorthands) {
+        emails[i] = emailShorthands[email]
+      }    
+    });
+    
+    // make sure there are emails
+    checkIfRecipientsEntered(emails); 
+
+    // make sure the emails are valid
+    checkIfEmailsAreValid(emails)  
+
+    return emails
+  }
+
+  function checkIfEmailsAreValid(emails) {
+    emails.forEach(email => {
+      if(!EmailValidator.validate(email)) {
+        console.log(chalk.red(`ERROR: Invalid email: ${email}`));
+        process.exit(0);
+      }
+    });
+  }
+
+  function checkIfRecipientsEntered(recipients) {
+    if(recipients.length == 0) {
+      console.log(chalk.red("ERROR: No valid emails entered"));
+      process.exit(0);
+    }
+  }
+
+  async function ask_whichTemplateToSend(templateInfo, question) {    
+    let templateJson = JSON.parse(templateInfo.templateJson);
+
+    let answers = await prompts({
+      type: 'autocomplete',
+      name: 'templateName',
+      message: question,
+      choices: templateInfo.templateNames.map(name => {
+        return {
+          title: name,
+          value: name
+        }
+      })
+    });
+
+    // Get just the object with the matching template name from the full list
+    templateJson = templateJson.templates.find(item => item.name == answers.templateName);
+
+    // if the template doesn't exist, just return the name
+    if(templateJson == undefined) {
+      templateJson = {
+        "name": answers.templateName
+      }
+    }
+    
+    return templateJson
+  }
+
+  function sendEmail(templateName, recipients) {
+    Sailthru.multiSend(templateName, recipients, function(err, response) {
+      if (err) {
+        console.log(chalk.red("ERROR:"));        
+        console.log(err);
+      } else {        
+        console.log(chalk.green(`Sent "${templateName}" to ${recipients}`));  
+        
+        // if dev, log the send id
+        env == 'dev' ? console.log(chalk.cyan(`Send id: ${response.send_id}`)) : ''
+      }
+    }); 
+  }
+
+  async function getTemplate(templateName) {
+    actuallyPushed = false // reset this variable
+
+    await Sailthru.getTemplate(templateName, async function(err, response) {
+      if (err) {
+        console.log(chalk.red("ERROR:"));
+        console.log(err);
+      } else {
+        let shouldSaveToFile = false
+        
+        // in dev nd debug, always save to file        
+        switch(env) {
+          case 'debug':            
+            // Success
+            console.log(chalk.cyan("Template Info:"));
+            console.log(chalk.cyan(`Name: ${response.name}`));
+            console.log(chalk.cyan(`Id: ${response.template_id}`));
+            console.log(chalk.cyan(`Subject: ${response.subject}`));
+            
+            shouldSaveToFile = true
+          case 'dev':
+            shouldSaveToFile = true
+            break;
+          case 'prod':
+            shouldSaveToFile = await ask_confirm('Save file?')
+            break;
+        }
+        
+        if (shouldSaveToFile == true) {
+          saveFiles(response)
+        }        
+      }
+    });
+  }
+
+  function saveFiles(response) {
+    
+    if(response.content_html && response.name) {
+      fs.writeFile(`./templates/${response.name}.html`, response.content_html, function(err) {
+        if (err) {
+          return console.log(err);
+        }
+        console.log(chalk.green(`File saved: ./templates/${response.name}.html`));
+      });
+    }
+  }
+
+  async function ask_confirm(message) {
+    const answers = await prompts([
+      {
+        type: 'confirm',
+        name: 'overwrite',
+        message: message
+      }
+    ]);
+
+    return answers.overwrite
+  }
+  
+  // only actually pushes the template if the user confirms, and if the content is different than what's already on Sailthru
+  // the diffcheck part happens automatically in the Sailthru API
+  async function pushTemplate(templateName) {
+    let htmlFileContent = ''   
+    
+    // todo: update to use promises
+    // wait for the template to be properly loaded, but only for 5 seconds
+    // not the best way to do this, but it other methods were not working
+    let timeout = Date.now() + 5000;
+    while (htmlFileContent === '') {
+      htmlFileContent = fs.readFileSync(`./templates/${templateName}.html`, 'utf8')
+      // Wait for a short period of time before checking again      
+      await new Promise(resolve => setTimeout(resolve, 250));
+      if (Date.now() > timeout) {
+        console.log(chalk.redBright("Error: No content found after 5 seconds, canceling push."));
+        return
+      }
+    } 
+
+    // check if the template is tiny to prevent accidental pushes
+    if(await htmlContentIsTiny(htmlFileContent)) {
+      if(!(await ask_confirm(`Template is tiny(less than ${tinyTemplateThreshold}). Are you sure you want to push?`))) {
+        console.log(chalk.redBright(`Error: template is less than ${tinyTemplateThreshold}, canceling push.`));
+        return
+      }
+    }
+
+    env == 'debug' ? console.log(chalk.white(`Template preview: ${htmlFileContent.substring(0, 100)}`)) : ''    
+   
+    let options = {
+      content_html: htmlFileContent,
+      subject: 'Test Subject Line 123'
+    };
+
+    // todo: update to use promises
+    Sailthru.saveTemplate(templateName, options, function(err, response) {
+      if (err) {
+        console.log(chalk.red("ERROR:"));
+        console.log(err);
+      } else {
+        // Success   
+        actuallyPushed = true
+        console.log(chalk.cyan("Template pushed to Sailthru!"));
+      }
+    });
+  }
+
+  async function htmlContentIsTiny(htmlFileContent) {
+    return htmlFileContent.length < tinyTemplateThreshold
+  }
