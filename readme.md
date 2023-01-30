@@ -10,8 +10,11 @@
 ## Live Syncing
 When code is pushed or pulled you will have the option to sync the code to the SailThru server every time the file is saved. This lets you work on HTML + Zephyr code with the setup and all the tools you are used to without having to manually upload each time.
 
+## Email Shorthands
+When sending tests, you can also configure email shorthands to be used. This lets you send tests to multiple recipients without having to type out the full email address each time. To update the shorthands, edit the ```config.js``` file in the root directory.
+
 ### Github Copilot 
-If Github Copilot is enabled, this tool is even better. Copilot is able to assist in writing the Zephyr code for SailThru, but has limited success so always check the outputs.
+If Github Copilot is enabled, workinglocally is even better. Copilot is able to assist in writing the Zephyr code for SailThru, but has limited success so always check the outputs.
 
 ## Install
 Download the repo and run the following command in the root directory:
