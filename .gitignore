@@ -5,3 +5,5 @@
 templates/*
 images/*
 config.js
+!/template/test.html
+
