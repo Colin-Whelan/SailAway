@@ -167,17 +167,15 @@ let templateNames = [];
         }
 
         // if env is not debug, push the template
-        env != "debug" 
-          ? await pushTemplate(templateObject.name) 
-          : console.log(chalk.green("!!MOCK!! Pushed template to Sailthru"))
-
-        // todo: update to use promises
-        // wait for the template to be pushed before continuing
-        // not the best way to do this, but it works for now
-        while (!actuallyPushed) {
-          // Wait for a short period of time before checking again
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
+        await new Promise(async (resolve, reject) => {
+          if(env != 'debug') {
+            await pushTemplate(templateObject.name)
+            resolve(true)
+          }
+          else {
+            console.log(chalk.green("!!MOCK!! Pushed template to Sailthru"))            
+          }
+        });
          
         shouldWatchFile = await ask_confirm(`Enable file watcher? (push template to SailThru as code updates)`)
         if(shouldWatchFile){await watchFilesForChanges(templateObject.name)}
@@ -251,7 +249,7 @@ let templateNames = [];
         message: `What emails to send to? (separate by comma)`
       }
     ]);
-    let emails = response.emails.replace(' ', '')
+    let emails = removeWhitespace(response.emails)
     
     emails = emails.split(",");  
             
@@ -268,6 +266,10 @@ let templateNames = [];
     checkIfEmailsAreValid(emails)  
 
     return emails
+  }
+
+  function removeWhitespace(string) {
+    return string.replace(/\s/g, '');
   }
 
   function checkIfEmailsAreValid(emails) {
@@ -329,8 +331,6 @@ let templateNames = [];
   }
 
   async function getTemplate(templateName) {
-    actuallyPushed = false // reset this variable
-
     await Sailthru.getTemplate(templateName, async function(err, response) {
       if (err) {
         console.log(chalk.red("ERROR:"));
@@ -421,17 +421,20 @@ let templateNames = [];
       subject: 'Test Subject Line 123'
     };
 
-    // todo: update to use promises
-    Sailthru.saveTemplate(templateName, options, function(err, response) {
-      if (err) {
-        console.log(chalk.red("ERROR:"));
-        console.log(err);
-      } else {
-        // Success   
-        actuallyPushed = true
-        console.log(chalk.cyan("Template pushed to Sailthru!"));
-      }
+    await new Promise(async (resolve, reject) => {
+      // Save the template in Sailthru
+      Sailthru.saveTemplate(templateName, options, function(err, response) {
+        if (err) {
+          console.log(chalk.red("ERROR:"));
+          reject(err);
+        } else {
+          // Success   
+          console.log(chalk.cyan("Template pushed to Sailthru!"));
+          resolve(response);
+        }
+      });
     });
+    
   }
 
   async function htmlContentIsTiny(htmlFileContent) {
