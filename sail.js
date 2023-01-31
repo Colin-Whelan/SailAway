@@ -1,11 +1,12 @@
 import sailthru_client from "sailthru-client";
 import dotenv from "dotenv";
-import chalk from 'chalk';
+import kleur from 'kleur';
 import fs from 'fs';
 import * as EmailValidator from 'email-validator';
 import prompts from 'prompts'
 import chokidar from 'chokidar'
 import minimist from 'minimist'
+
 
 const argv = minimist(process.argv.slice(2));
 
@@ -29,7 +30,7 @@ const SAILTHRU_API_KEY = process.env.SAILTHRU_API_KEY;
 const SAILTHRU_API_SECRET = process.env.SAILTHRU_API_SECRET;
 
 if (!SAILTHRU_API_KEY || !SAILTHRU_API_SECRET) {
-  console.log(chalk.red("ERROR: Missing API Key or Secret"));
+  console.log(kleur.red("ERROR: Missing API Key or Secret"));
   process.exit(0);
 }
 
@@ -57,7 +58,7 @@ let templateNames = [];
   await new Promise(async (resolve, reject) => {
     Sailthru.getTemplates(function(err, response) {
       if (err) {
-        reject(chalk.red("ERROR: " + err));
+        reject(kleur.red("ERROR: " + err));
       } else {
         templateJson = JSON.stringify(response);
         response.templates.forEach(template => {
@@ -101,7 +102,7 @@ let templateNames = [];
         // if not in debug mode, send email
         env != "debug" 
           ? sendEmail(templateObject.name, recipients)
-          : console.log(chalk.green(`!!MOCK!! Sent "${templateObject.name}" to ${recipients}`));
+          : console.log(kleur.green(`!!MOCK!! Sent "${templateObject.name}" to ${recipients}`));
            
         break;
       case "pull":
@@ -154,11 +155,11 @@ let templateNames = [];
 
         // if the template exists in Sailthru, ask for overwrite confirmation
         if(templateObject.template_id) {          
-          overwriteConfirmation = await ask_confirm(chalk.red(`Template already exists in SailThru. Confirm overwrite of "${templateObject.name}"?`))
+          overwriteConfirmation = await ask_confirm(kleur.red(`Template already exists in SailThru. Confirm overwrite of "${templateObject.name}"?`))
 
           // if overwrite is not confirmed, exit the program
           if(!overwriteConfirmation) {
-            console.log(chalk.red("Push cancelled - Exiting."));
+            console.log(kleur.red("Push cancelled - Exiting."));
             process.exit(0);
           }
         }
@@ -170,7 +171,7 @@ let templateNames = [];
             resolve(true)
           }
           else {
-            console.log(chalk.green("!!MOCK!! Pushed template to Sailthru"))            
+            console.log(kleur.green("!!MOCK!! Pushed template to Sailthru"))            
           }
         });
          
@@ -179,7 +180,7 @@ let templateNames = [];
         
         break;
       case "Exit":
-        console.log(chalk.red("Exiting"));
+        console.log(kleur.red("Exiting"));
         process.exit(0);
         break;
     }
@@ -213,7 +214,7 @@ let templateNames = [];
   async function watchFilesForChanges(templateName) {
     const log = console.log.bind(console);
 
-    console.log(chalk.yellow(`Watching: templates/${templateName}.html`));    
+    console.log(kleur.yellow(`Watching: templates/${templateName}.html`));    
 
     // Initialize watcher.
     const watcher = chokidar.watch(`templates/${templateName}.html`, {
@@ -225,15 +226,15 @@ let templateNames = [];
     watcher
     .on('change', async path => {
       log()
-      log(chalk.yellow(`Updated: ${path} --> Pushing to Sailthru...`))
+      log(kleur.yellow(`Updated: ${path} --> Pushing to Sailthru...`))
 
       // if env is not debug, push the template
       env != "debug" 
         ? await pushTemplate(templateName) 
-        : console.log(chalk.green("!!MOCK!! Pushed template to Sailthru"))
+        : console.log(kleur.green("!!MOCK!! Pushed template to Sailthru"))
     })
     .on('unlink', path => {
-      log(chalk.red(`${path} removed. Shutting down...`))
+      log(kleur.red(`${path} removed. Shutting down...`))
       process.exit(0);
     });
   }
@@ -272,7 +273,7 @@ let templateNames = [];
   function checkIfEmailsAreValid(emails) {
     emails.forEach(email => {
       if(!EmailValidator.validate(email)) {
-        console.log(chalk.red(`ERROR: Invalid email: ${email}`));
+        console.log(kleur.red(`ERROR: Invalid email: ${email}`));
         process.exit(0);
       }
     });
@@ -280,7 +281,7 @@ let templateNames = [];
 
   function checkIfRecipientsEntered(recipients) {
     if(recipients.length == 0) {
-      console.log(chalk.red("ERROR: No valid emails entered"));
+      console.log(kleur.red("ERROR: No valid emails entered"));
       process.exit(0);
     }
   }
@@ -316,13 +317,13 @@ let templateNames = [];
   function sendEmail(templateName, recipients) {
     Sailthru.multiSend(templateName, recipients, function(err, response) {
       if (err) {
-        console.log(chalk.red("ERROR:"));        
+        console.log(kleur.red("ERROR:"));        
         console.log(err);
       } else {        
-        console.log(chalk.green(`Sent "${templateName}" to ${recipients}`));  
+        console.log(kleur.green(`Sent "${templateName}" to ${recipients}`));  
         
         // if dev, log the send id
-        env == 'dev' ? console.log(chalk.cyan(`Send id: ${response.send_id}`)) : ''
+        env == 'dev' ? console.log(kleur.cyan(`Send id: ${response.send_id}`)) : ''
       }
     }); 
   }
@@ -330,7 +331,7 @@ let templateNames = [];
   async function getTemplate(templateName) {
     await Sailthru.getTemplate(templateName, async function(err, response) {
       if (err) {
-        console.log(chalk.red("ERROR:"));
+        console.log(kleur.red("ERROR:"));
         console.log(err);
       } else {
         let shouldSaveToFile = false
@@ -339,10 +340,10 @@ let templateNames = [];
         switch(env) {
           case 'debug':            
             // Success
-            console.log(chalk.cyan("Template Info:"));
-            console.log(chalk.cyan(`Name: ${response.name}`));
-            console.log(chalk.cyan(`Id: ${response.template_id}`));
-            console.log(chalk.cyan(`Subject: ${response.subject}`));
+            console.log(kleur.cyan("Template Info:"));
+            console.log(kleur.cyan(`Name: ${response.name}`));
+            console.log(kleur.cyan(`Id: ${response.template_id}`));
+            console.log(kleur.cyan(`Subject: ${response.subject}`));
             
             shouldSaveToFile = true
           case 'dev':
@@ -367,7 +368,7 @@ let templateNames = [];
         if (err) {
           return console.log(err);
         }
-        console.log(chalk.green(`File saved: ./templates/${response.name}.html`));
+        console.log(kleur.green(`File saved: ./templates/${response.name}.html`));
       });
     }
   }
@@ -398,7 +399,7 @@ let templateNames = [];
       // Wait for a short period of time before checking again      
       await new Promise(resolve => setTimeout(resolve, 250));
       if (Date.now() > timeout) {
-        console.log(chalk.redBright("Error: No content found after 5 seconds, canceling push."));
+        console.log(kleur.redBright("Error: No content found after 5 seconds, canceling push."));
         return
       }
     } 
@@ -406,12 +407,12 @@ let templateNames = [];
     // check if the template is tiny to prevent accidental pushes
     if(await htmlContentIsTiny(htmlFileContent)) {
       if(!(await ask_confirm(`Template is tiny(less than ${tinyTemplateThreshold}). Are you sure you want to push?`))) {
-        console.log(chalk.redBright(`Error: template is less than ${tinyTemplateThreshold}, canceling push.`));
+        console.log(kleur.redBright(`Error: template is less than ${tinyTemplateThreshold}, canceling push.`));
         return
       }
     }
 
-    env == 'debug' ? console.log(chalk.white(`Template preview: ${htmlFileContent.substring(0, 100)}`)) : ''    
+    env == 'debug' ? console.log(kleur.white(`Template preview: ${htmlFileContent.substring(0, 100)}`)) : ''    
    
     let options = {
       content_html: htmlFileContent,
@@ -422,11 +423,11 @@ let templateNames = [];
       // Save the template in Sailthru
       Sailthru.saveTemplate(templateName, options, function(err, response) {
         if (err) {
-          console.log(chalk.red("ERROR:"));
+          console.log(kleur.red("ERROR:"));
           reject(err);
         } else {
           // Success   
-          console.log(chalk.cyan("Template pushed to Sailthru!"));
+          console.log(kleur.cyan("Template pushed to Sailthru!"));
           resolve(response);
         }
       });
