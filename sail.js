@@ -1,7 +1,7 @@
 import sailthru_client from "sailthru-client";
 import dotenv from "dotenv";
 import chalk from 'chalk';
-import fs, { stat } from 'fs';
+import fs from 'fs';
 import * as EmailValidator from 'email-validator';
 import prompts from 'prompts'
 import chokidar from 'chokidar'
@@ -9,13 +9,12 @@ import minimist from 'minimist'
 
 const argv = minimist(process.argv.slice(2));
 
-// set environment variables based on command line argument, or default to prod
-const env = argv.env ? argv.env.toLowerCase() : null;
-
+// set environment variables based on command line argument
+const env = argv.env ? argv.env.toLowerCase() : '';
 
 // load environment variables from .env file based on environment
 switch (env) {
-  case env != null:    
+  case (env):  
     dotenv.config({ path: `./${env}.env` });
     break
   default:
@@ -29,7 +28,7 @@ const tinyTemplateThreshold = 100;
 const SAILTHRU_API_KEY = process.env.SAILTHRU_API_KEY;
 const SAILTHRU_API_SECRET = process.env.SAILTHRU_API_SECRET;
 
-if (SAILTHRU_API_KEY == null || SAILTHRU_API_SECRET == null) {
+if (!SAILTHRU_API_KEY || !SAILTHRU_API_SECRET) {
   console.log(chalk.red("ERROR: Missing API Key or Secret"));
   process.exit(0);
 }
@@ -49,8 +48,6 @@ switch (env) {
 import config from './config.js'
 
 const emailShorthands = config.emails
-
-let actuallyPushed = false;
 
 let templateJson
 let templateNames = [];
