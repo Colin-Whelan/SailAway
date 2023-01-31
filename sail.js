@@ -204,11 +204,7 @@ let templateNames = [];
       return b.date - a.date;
     });
 
-    const fileNames = fileData.map((file) => {
-      return file.name;
-    });
-
-    return fileNames;
+    return fileData.map(file => file.name);
 }
 
   async function watchFilesForChanges(templateName) {
@@ -302,16 +298,8 @@ let templateNames = [];
     });
 
     // Get just the object with the matching template name from the full list
-    templateJson = templateJson.templates.find(item => item.name == answers.templateName);
-
     // if the template doesn't exist, just return the name
-    if(templateJson == undefined) {
-      templateJson = {
-        "name": answers.templateName
-      }
-    }
-    
-    return templateJson
+    return templateJson.templates.find(item => item.name == answers.templateName) || { name: answers.templateName };
   }
 
   function sendEmail(templateName, recipients) {
