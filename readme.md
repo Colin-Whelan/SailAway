@@ -1,17 +1,23 @@
-<h1 align="center">Welcome to SailAway ⛵</h1>
+<h1 align="center">Streamline your coding journey with SailAway ⛵</h1>
+<h2 align="center">A command line tool for SailThru</h2>
+
 <p>
   <img alt="Version" src="https://img.shields.io/badge/version-1.0-blue.svg?cacheSeconds=2592000" />
 </p>
 
-> A command line tool for SailThru to enable local code development with live syncing and the ability to send tests to several recipients with ease.
+> Enables local code development with live code syncing and email shorthands for quick testing.
 
 # Features
 
 ## Live Syncing
-When code is pushed or pulled you will have the option to sync the code to the SailThru server every time the file is saved. This lets you work on HTML + Zephyr code with the setup and all the tools you are used to without having to manually upload each time.
+When code is pushed or pulled you will have the option to sync the code to the SailThru server every time the file is saved. This lets you work on HTML + Zephyr code with all the setup and the tools you are used to without having to manually upload each time.
 
 ## Email Shorthands
-When sending tests, you can also configure email shorthands to be used. This lets you send tests to multiple recipients without having to type out the full email address each time. To update the shorthands, edit the ```config.js``` file in the root directory.
+When sending tests, you can also configure email shorthands instead of typing addresses. To update the shorthands, edit the ```config.js``` file in the root directory. Shorthands and email addresses can be mixed in the recipients list.
+
+```sh
+What emails to send to? (separate by comma) » example@gmail.com, me, test, etc
+```
 
 ### Github Copilot 
 If Github Copilot is enabled, workinglocally is even better. Copilot is able to assist in writing the Zephyr code for SailThru, but has limited success so always check the outputs.
