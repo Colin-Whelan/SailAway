@@ -8,6 +8,7 @@
 > Enables local code development with live code syncing and email shorthands for quick testing.
 
 # Features
+SailAway brings development of SailThru templates back to your local coding environment. Gone are the days of manually/downloading uploading code in SailThru or using the online editor. Use all the dev tools you are used to and let SailAway handle syncing the code to SailThru.
 
 ## Live Syncing
 When code is pushed or pulled you will have the option to sync the code to the SailThru server every time the file is saved. This lets you work on HTML + Zephyr code with all the setup and the tools you are used to without having to manually upload each time.
