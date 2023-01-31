@@ -15,11 +15,11 @@ const env = argv.env ? argv.env.toLowerCase() : null;
 
 // load environment variables from .env file based on environment
 switch (env) {
-  case env:    
+  case env != null:    
     dotenv.config({ path: `./${env}.env` });
     break
   default:
-    dotenv.config({ path: './.env' });
+    dotenv.config({ path: '.env' });
     break
 }
 
