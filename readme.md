@@ -1,9 +1,9 @@
-<h1 align="center">Welcome to SailLaVie 👋</h1>
+<h1 align="center">Welcome to SailAway ⛵</h1>
 <p>
   <img alt="Version" src="https://img.shields.io/badge/version-1.0-blue.svg?cacheSeconds=2592000" />
 </p>
 
-> Helper functions for SailThru to enable local code development with live syncing and the ability to send tests to several recipients with ease.
+> A command line tool for SailThru to enable local code development with live syncing and the ability to send tests to several recipients with ease.
 
 # Features
 
