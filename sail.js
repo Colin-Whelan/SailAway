@@ -404,8 +404,7 @@ let templateNames = [];
     env == 'debug' ? console.log(kleur.white(`Template preview: ${htmlFileContent.substring(0, 100)}`)) : ''
 
     let options = {
-      content_html: htmlFileContent,
-      subject: 'Test Subject Line 123'
+      content_html: htmlFileContent
     };
 
     await new Promise(async (resolve, reject) => {
