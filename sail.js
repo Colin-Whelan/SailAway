@@ -335,13 +335,12 @@ let templateNames = [];
             console.log(kleur.cyan(`Subject: ${response.subject}`));
 
             shouldSaveToFile = true
-          case 'dev':
-            shouldSaveToFile = true
-            break;
           case 'prod':
+          default:
             shouldSaveToFile = await ask_confirm('Save file?')
             break;
         }
+
 
         if (shouldSaveToFile == true) {
           saveFiles(response)
@@ -350,7 +349,7 @@ let templateNames = [];
     });
   }
 
-  function saveFiles(response) {
+function saveFiles(response) {
 
     if(response.content_html && response.name) {
       fs.writeFile(`./templates/${response.name}.html`, response.content_html, function(err) {
