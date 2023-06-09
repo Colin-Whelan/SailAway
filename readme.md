@@ -21,7 +21,7 @@ What emails to send to? (separate by comma) » example@gmail.com, me, test, etc
 ```
 
 ### Github Copilot 
-If Github Copilot is enabled, workinglocally is even better. Copilot is able to assist in writing the Zephyr code for SailThru, but has limited success so always check the outputs.
+If Github Copilot is enabled, working locally is even better. Copilot is able to assist in writing the Zephyr code for SailThru, but has limited success so always check the outputs.
 
 ## Install
 Download the repo and run the following command in the root directory:
