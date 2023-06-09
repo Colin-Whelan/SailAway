@@ -106,8 +106,8 @@ let templateNames = [];
 
         break;
       case "pull":
-        // adds option to pull all templates in the dev environment
-        if(env === "dev") {templateInfo.templateNames.push("ALL TEMPLATES")}
+        // adds option to pull all templates, go 'up' one in the CLI to find this option
+        {templateInfo.templateNames.push("ALL TEMPLATES")}
 
         templateObject = await ask_whichTemplateToSend(templateInfo, 'Which template would you like to pull?')
 
@@ -118,16 +118,17 @@ let templateNames = [];
           // get all templates
           if(confirmOverwrite){
             templateInfo.templateNames.forEach(templateName => {
-              getTemplate(templateName);
+              // don't try to get a template named "ALL TEMPLATES"
+              if(templateName != "ALL TEMPLATES") { getTemplate(templateName) }
             });
           }
+          if (shouldWatchFile) { watchFilesForChanges(templateObject.name) }
         }
         else{
           shouldWatchFile = await ask_confirm(`Enable file watcher? (push template to SailThru as code updates)`)
           getTemplate(templateObject.name)
+          if (shouldWatchFile) { watchFilesForChanges(templateObject.name) }
         }
-
-        if(shouldWatchFile){watchFilesForChanges(templateObject.name)}
 
         break;
       case "push":
@@ -317,15 +318,12 @@ let templateNames = [];
     });
   }
 
-  async function getTemplate(templateName) {
+  async function getTemplate(templateName, userChoice) {
     await Sailthru.getTemplate(templateName, async function(err, response) {
       if (err) {
         console.log(kleur.red("ERROR:"));
         console.log(err);
       } else {
-        let shouldSaveToFile = false
-
-        // in dev nd debug, always save to file
         switch(env) {
           case 'debug':
             // Success
@@ -333,33 +331,51 @@ let templateNames = [];
             console.log(kleur.cyan(`Name: ${response.name}`));
             console.log(kleur.cyan(`Id: ${response.template_id}`));
             console.log(kleur.cyan(`Subject: ${response.subject}`));
-
-            shouldSaveToFile = true
-          case 'prod':
           default:
-            shouldSaveToFile = await ask_confirm('Save file?')
             break;
         }
 
-
-        if (shouldSaveToFile == true) {
-          saveFiles(response)
-        }
+        saveFiles(response, userChoice)
       }
     });
   }
 
-function saveFiles(response) {
+function saveFiles(response, userChoice) {
+  if (response.content_html && response.name) {
+    const filePath = `./templates/${response.name}.html`;
 
-    if(response.content_html && response.name) {
-      fs.writeFile(`./templates/${response.name}.html`, response.content_html, function(err) {
-        if (err) {
-          return console.log(err);
+    fs.access(filePath, fs.constants.F_OK, async (err) => {
+      if (err) {
+        // File does not exist, so we can save it
+        fs.writeFile(filePath, response.content_html, (err) => {
+          if (err) {
+            return console.log(err);
+          }
+          console.log(kleur.green(`File saved: ${filePath}`));
+        });
+      } else {
+        let shouldOverwriteFile
+        if (userChoice == 'ALL TEMPLATES') {
+          shouldOverwriteFile = true
         }
-        console.log(kleur.green(`File saved: ./templates/${response.name}.html`));
-      });
-    }
+        else {
+          shouldOverwriteFile = await ask_confirm(`File already exists: ${filePath}. Overwrite?`)
+        }
+
+
+
+        if (shouldOverwriteFile) {
+          fs.writeFile(filePath, response.content_html, (err) => {
+            if (err) {
+              return console.log(err);
+            }
+            console.log(kleur.green(`File saved: ${filePath}`));
+          });
+        }
+      }
+    });
   }
+}
 
   async function ask_confirm(message) {
     const answers = await prompts([
