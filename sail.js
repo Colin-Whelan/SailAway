@@ -36,14 +36,8 @@ if (!SAILTHRU_API_KEY || !SAILTHRU_API_SECRET) {
 
 var Sailthru = sailthru_client.createSailthruClient(SAILTHRU_API_KEY, SAILTHRU_API_SECRET);
 
-switch (env) {
-  case 'debug':
-    Sailthru.enableLogging();
-    break
-  default:
-    Sailthru.disableLogging();
-    break
-}
+// disable logging
+Sailthru.disableLogging();
 
 // add config for email addresses
 import config from './config.js'
@@ -99,10 +93,7 @@ let templateNames = [];
 
         templateObject = await ask_whichTemplateToSend(templateInfo, 'Which template would you like to send?')
 
-        // if not in debug mode, send email
-        env != "debug"
-          ? sendEmail(templateObject.name, recipients)
-          : console.log(kleur.green(`!!MOCK!! Sent "${templateObject.name}" to ${recipients}`));
+        sendEmail(templateObject.name, recipients)
 
         break;
       case "pull":
@@ -165,15 +156,10 @@ let templateNames = [];
           }
         }
 
-        // if env is not debug, push the template
+        // push the template
         await new Promise(async (resolve, reject) => {
-          if(env != 'debug') {
-            await pushTemplate(templateObject.name)
-            resolve(true)
-          }
-          else {
-            console.log(kleur.green("!!MOCK!! Pushed template to Sailthru"))
-          }
+          await pushTemplate(templateObject.name)
+          resolve(true)
         });
 
         shouldWatchFile = await ask_confirm(`Enable file watcher? (push template to SailThru as code updates)`)
@@ -225,10 +211,8 @@ let templateNames = [];
       log()
       log(kleur.yellow(`Updated: ${path} --> Pushing to Sailthru...`))
 
-      // if env is not debug, push the template
-      env != "debug"
-        ? await pushTemplate(templateName)
-        : console.log(kleur.green("!!MOCK!! Pushed template to Sailthru"))
+      // Push the template
+      await pushTemplate(templateName)
     })
     .on('unlink', path => {
       log(kleur.red(`${path} removed. Shutting down...`))
@@ -324,17 +308,7 @@ let templateNames = [];
         console.log(kleur.red("ERROR:"));
         console.log(err);
       } else {
-        switch(env) {
-          case 'debug':
-            // Success
-            console.log(kleur.cyan("Template Info:"));
-            console.log(kleur.cyan(`Name: ${response.name}`));
-            console.log(kleur.cyan(`Id: ${response.template_id}`));
-            console.log(kleur.cyan(`Subject: ${response.subject}`));
-          default:
-            break;
-        }
-
+        console.log(response)
         saveFiles(response, userChoice)
       }
     });
@@ -347,7 +321,7 @@ function saveFiles(response, userChoice) {
     fs.access(filePath, fs.constants.F_OK, async (err) => {
       if (err) {
         // File does not exist, so we can save it
-        fs.writeFile(filePath, response.content_html, (err) => {
+        fs.writeFile(filePath, response.content_json, (err) => {
           if (err) {
             return console.log(err);
           }
@@ -362,10 +336,8 @@ function saveFiles(response, userChoice) {
           shouldOverwriteFile = await ask_confirm(`File already exists: ${filePath}. Overwrite?`)
         }
 
-
-
         if (shouldOverwriteFile) {
-          fs.writeFile(filePath, response.content_html, (err) => {
+          fs.writeFile(filePath, response.content_json, (err) => {
             if (err) {
               return console.log(err);
             }
@@ -415,8 +387,6 @@ function saveFiles(response, userChoice) {
         return
       }
     }
-
-    env == 'debug' ? console.log(kleur.white(`Template preview: ${htmlFileContent.substring(0, 100)}`)) : ''
 
     let options = {
       content_html: htmlFileContent
