@@ -13,10 +13,10 @@ SailAway brings development of SailThru templates back to your local coding envi
 ## Live Syncing
 When code is pushed or pulled you will have the option to sync the code to the SailThru server every time the file is saved. This lets you work on HTML + Zephyr code with all the setup and the tools you are used to without having to manually upload each time.
 
-WARNING: Be VERY careful with this. This will can/will overwrite all local templates, and all templates in the selected environment. Be very careful!
-
 ## Bulk Template Download and Upload (WIP)
 Download all templates from an environment, or upload an entire folder's worth of emails to another. Bulk upload requires that all from and reply-to email addresses are already set up in the environment.
+
+WARNING: Be VERY careful with this. This will can/will overwrite all local templates, and all templates in the selected environment. Be very careful!
 
 ## Email Shorthands
 When sending tests, you can also configure email shorthands instead of typing addresses. To update the shorthands, edit the ```config.js``` file in the root directory. Shorthands and email addresses can be mixed in the recipients list.
