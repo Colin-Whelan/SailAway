@@ -3,7 +3,10 @@
 /node_modules/*
 /templates/*
 templates/*
+/options/*
+options/*
 images/*
 config.js
+!/options/test.json
 !/template/test.html
-
+sail_i.js
