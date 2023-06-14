@@ -140,6 +140,9 @@ let templateNames = [];
         // set the template list to the names of the files in the templates folder
         templateInfo.templateNames = trimmedFileNames;
 
+        // adds option to pushe all templates, go 'up' one in the CLI to find this option
+        templateInfo.templateNames.push("ALL TEMPLATES")
+
         // ask for the template to push and return any existing template info from sailthru
         templateObject = await ask_whichTemplateToSend(templateInfo, 'These files exist in "/templates/". Which template to push?')
 
@@ -156,14 +159,31 @@ let templateNames = [];
           }
         }
 
-        // push the template
-        await new Promise(async (resolve, reject) => {
-          await pushTemplate(templateObject.name)
-          resolve(true)
-        });
 
-        shouldWatchFile = await ask_confirm(`Enable file watcher? (push template to SailThru as code updates)`)
-        if(shouldWatchFile){await watchFilesForChanges(templateObject.name)}
+        if (templateObject.name === "ALL TEMPLATES") {
+          // push all templates
+          templateInfo.templateNames.forEach(async templateName => {
+            // don't try to push a template named "ALL TEMPLATES"
+            if (templateName != "ALL TEMPLATES") {
+              // push the template
+              await new Promise(async (resolve, reject) => {
+                await pushTemplate(templateName)
+                resolve(true)
+              });
+             }
+          });
+        }
+        else {
+          // push the template
+          await new Promise(async (resolve, reject) => {
+            await pushTemplate(templateObject.name)
+            resolve(true)
+          });
+
+          shouldWatchFile = await ask_confirm(`Enable file watcher? (push template to SailThru as code updates)`)
+          if (shouldWatchFile) { await watchFilesForChanges(templateObject.name) }
+        }
+
 
         break;
       case "Exit":
@@ -308,7 +328,6 @@ let templateNames = [];
         console.log(kleur.red("ERROR:"));
         console.log(err);
       } else {
-        console.log(response)
         saveFiles(response, userChoice)
       }
     });
@@ -318,10 +337,24 @@ function saveFiles(response, userChoice) {
   if (response.content_html && response.name) {
     const filePath = `./templates/${response.name}.html`;
 
+    // save the file options, without the html
+    const fileOptions = response;
+    // delete fileOptions.content_html;
+
+    // save the options file to the /options/ folder
+    const optionsFilePath = `./options/${response.name}.json`;
+
+
     fs.access(filePath, fs.constants.F_OK, async (err) => {
       if (err) {
-        // File does not exist, so we can save it
-        fs.writeFile(filePath, response.content_json, (err) => {
+        // File does not exist, so it can be safely saved
+        fs.writeFile(optionsFilePath, JSON.stringify(fileOptions), (err) => {
+          if (err) {
+            return console.log(err);
+          }
+          console.log(kleur.green(`Options saved: ${optionsFilePath}`));
+        });
+        fs.writeFile(filePath, response.content_html, (err) => {
           if (err) {
             return console.log(err);
           }
@@ -329,6 +362,7 @@ function saveFiles(response, userChoice) {
         });
       } else {
         let shouldOverwriteFile
+
         if (userChoice == 'ALL TEMPLATES') {
           shouldOverwriteFile = true
         }
@@ -337,7 +371,13 @@ function saveFiles(response, userChoice) {
         }
 
         if (shouldOverwriteFile) {
-          fs.writeFile(filePath, response.content_json, (err) => {
+          fs.writeFile(optionsFilePath, JSON.stringify(fileOptions), (err) => {
+            if (err) {
+              return console.log(err);
+            }
+            console.log(kleur.green(`Options saved: ${optionsFilePath}`));
+          });
+          fs.writeFile(filePath, response.content_html, (err) => {
             if (err) {
               return console.log(err);
             }
@@ -347,6 +387,13 @@ function saveFiles(response, userChoice) {
       }
     });
   }
+}
+
+function convertArrayToObject(array) {
+  return array.reduce((obj, item) => {
+    obj[item] = 1;
+    return obj;
+  }, {});
 }
 
   async function ask_confirm(message) {
@@ -388,9 +435,44 @@ function saveFiles(response, userChoice) {
       }
     }
 
-    let options = {
-      content_html: htmlFileContent
-    };
+    let options = {}
+
+    try {
+      let optionsFile = fs.readFileSync(`./options/${templateName}.json`, 'utf8');
+
+      // if the template is a visual template, remove the revisions
+      if (JSON.parse(optionsFile).mode == 'visual_email') {
+        // from emails and reply to emails must be pre-existing in Sailthru or this will fail silently
+        let labels = JSON.parse(optionsFile).labels
+
+        options = {
+          name: templateName,
+          public_name: templateName,
+          from_name: fromName,
+          from_email: fromEmail,
+          replyto_email: JSON.parse(optionsFile).replyto_email,
+          subject: JSON.parse(optionsFile).subject,
+          sample: JSON.parse(optionsFile).sample,
+          preheader: JSON.parse(optionsFile).preheader,
+          setup: JSON.parse(optionsFile).setup,
+          labels: convertArrayToObject(labels),
+          tags: JSON.parse(optionsFile).tags,
+          is_basic: JSON.parse(optionsFile).is_basic,
+          link_params: JSON.parse(optionsFile).link_params,
+          is_link_tracking: JSON.parse(optionsFile).is_link_tracking,
+          content_html: htmlFileContent,
+          content_text: '',
+          content_json: JSON.parse(optionsFile).content_json,
+          mode: 'visual_email'
+        }
+      }
+      else {
+        options.content_html = htmlFileContent;
+      }
+    }
+    catch (err) {
+      options.content_html = htmlFileContent;
+    }
 
     await new Promise(async (resolve, reject) => {
       // Save the template in Sailthru
