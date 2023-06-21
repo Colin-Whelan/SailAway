@@ -161,6 +161,18 @@ let templateNames = [];
 
 
         if (templateObject.name === "ALL TEMPLATES") {
+          // confirm push of all templates
+          let confirm = await ask_confirm(`This will overwrite ALL templates in SailThru(${env}). Continue?`)
+          if (!confirm) {
+            console.log(kleur.red("Push cancelled - Exiting."));
+            process.exit(0);
+          }
+          let doubleConfirm = await ask_confirm(`Be extra careful! This will overwrite ALL templates in SailThru(${env})! Continue?`)
+          if (!doubleConfirm) {
+            console.log(kleur.red("Push cancelled - Exiting."));
+            process.exit(0);
+          }
+
           // push all templates
           templateInfo.templateNames.forEach(async templateName => {
             // don't try to push a template named "ALL TEMPLATES"
