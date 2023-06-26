@@ -226,6 +226,33 @@ let templateNames = [];
     return fileData.map(file => file.name);
 }
 
+async function promptForMissingOptions(defaultOptions) {
+  const missingOptions = {};
+  const questions = Object.keys(defaultOptions).map(key => ({
+    type: 'text',
+    name: key,
+    message: `Enter a value for ${key} (default: ${defaultOptions[key]}):`,
+    initial: defaultOptions[key]
+  }));
+
+  const response = await prompts(questions);
+  for (const key in response) {
+    missingOptions[key] = response[key] !== "" ? response[key] : defaultOptions[key];
+  }
+
+  return missingOptions;
+}
+
+function saveOptionsToFile(templateName, options) {
+  const optionsFilePath = `./options/${templateName}.json`;
+  fs.writeFile(optionsFilePath, JSON.stringify(options), (err) => {
+    if (err) {
+      return console.log(kleur.red(err));
+    }
+    console.log(kleur.green(`Options saved: ${optionsFilePath}`));
+  });
+}
+
   async function watchFilesForChanges(templateName) {
     const log = console.log.bind(console);
 
@@ -482,8 +509,23 @@ function convertArrayToObject(array) {
       }
     }
     catch (err) {
-      console.log(kleur.yellow(`Warning: ${err}`));
-      // process.exit(1);
+      console.log(kleur.yellow(`Options file missing. Creating default...`));
+      let defaultOptions = await promptForMissingOptions(config.defaultOptions);
+
+      defaultOptions.setup = "{" + defaultOptions.setup + "}"
+      defaultOptions.labels = convertArrayToObject(defaultOptions.labels)
+
+
+      options = {
+        name: templateName,
+        public_name: templateName,
+        content_html: htmlFileContent,
+        content_text: '',
+        content_json: '',
+        mode: 'email'
+      }
+      options = { ...options, ...defaultOptions}
+      saveOptionsToFile(templateName, options);
     }
 
     await new Promise(async (resolve, reject) => {
