@@ -91,7 +91,7 @@ let templateNames = [];
       case "test":
         let recipients = await ask_whichEmailToSendTo()
 
-        templateObject = await ask_whichTemplateToSend(templateInfo, 'Which template would you like to send?')
+        templateObject = await ask_whichTemplate(templateInfo, 'Which template would you like to send?')
 
         sendEmail(templateObject.name, recipients)
 
@@ -100,7 +100,7 @@ let templateNames = [];
         // adds option to pull all templates, go 'up' one in the CLI to find this option
         {templateInfo.templateNames.push("ALL TEMPLATES")}
 
-        templateObject = await ask_whichTemplateToSend(templateInfo, 'Which template would you like to pull?')
+        templateObject = await ask_whichTemplate(templateInfo, 'Which template would you like to pull?')
 
         if(templateObject.name === "ALL TEMPLATES") {
           let confirmOverwrite = await ask_confirm('WARNING: This will overwrite any existing files in the templates folder of the same name. Continue?')
@@ -144,7 +144,7 @@ let templateNames = [];
         templateInfo.templateNames.push("ALL TEMPLATES")
 
         // ask for the template to push and return any existing template info from sailthru
-        templateObject = await ask_whichTemplateToSend(templateInfo, 'These files exist in "/templates/". Which template to push?')
+        templateObject = await ask_whichTemplate(templateInfo, 'These files exist in "/templates/". Which template to push?')
 
         let overwriteConfirmation
 
@@ -299,7 +299,7 @@ let templateNames = [];
     }
   }
 
-  async function ask_whichTemplateToSend(templateInfo, question) {
+  async function ask_whichTemplate(templateInfo, question) {
     let templateJson = JSON.parse(templateInfo.templateJson);
 
     let answers = await prompts({
@@ -347,11 +347,11 @@ let templateNames = [];
 
 function saveFiles(response, userChoice) {
   if (response.content_html && response.name) {
+    console.log(response)
     const filePath = `./templates/${response.name}.html`;
 
     // save the file options, without the html
     const fileOptions = response;
-    // delete fileOptions.content_html;
 
     // save the options file to the /options/ folder
     const optionsFilePath = `./options/${response.name}.json`;
@@ -448,7 +448,6 @@ function convertArrayToObject(array) {
     }
 
     let options = {}
-
     try {
       let optionsFile = fs.readFileSync(`./options/${templateName}.json`, 'utf8');
 
@@ -460,8 +459,8 @@ function convertArrayToObject(array) {
         options = {
           name: templateName,
           public_name: templateName,
-          from_name: fromName,
-          from_email: fromEmail,
+          from_name: JSON.parse(optionsFile).from_name,
+          from_email: JSON.parse(optionsFile).from_email,
           replyto_email: JSON.parse(optionsFile).replyto_email,
           subject: JSON.parse(optionsFile).subject,
           sample: JSON.parse(optionsFile).sample,
@@ -483,7 +482,8 @@ function convertArrayToObject(array) {
       }
     }
     catch (err) {
-      options.content_html = htmlFileContent;
+      console.log(kleur.yellow(`Warning: ${err}`));
+      // process.exit(1);
     }
 
     await new Promise(async (resolve, reject) => {
