@@ -7,3 +7,4 @@ templates/*
 options/*
 images/*
 sail_i.js
+config.js
