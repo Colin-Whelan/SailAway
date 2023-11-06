@@ -374,7 +374,6 @@ function saveOptionsToFile(templateName, options) {
 
 function saveFiles(response, userChoice) {
   if (response.content_html && response.name) {
-    console.log(response)
     const filePath = `./templates/${response.name}.html`;
 
     // save the file options, without the html
@@ -429,6 +428,8 @@ function saveFiles(response, userChoice) {
 }
 
 function convertArrayToObject(array) {
+  array = Array.isArray(array) ? array : [array];
+
   return array.reduce((obj, item) => {
     obj[item] = 1;
     return obj;
@@ -453,8 +454,8 @@ function convertArrayToObject(array) {
     let htmlFileContent = ''
 
     // todo: update to use promises
-    // wait for the template to be properly loaded, but only for 5 seconds
-    // not the best way to do this, but it other methods were not working
+    // waits for the template to be properly loaded, but only for 5 seconds
+    // not the best way to do this, but other methods were not working
     let timeout = Date.now() + 5000;
     while (htmlFileContent === '') {
       htmlFileContent = fs.readFileSync(`./templates/${templateName}.html`, 'utf8')
@@ -477,55 +478,73 @@ function convertArrayToObject(array) {
     let options = {}
     try {
       let optionsFile = fs.readFileSync(`./options/${templateName}.json`, 'utf8');
-
-      // if the template is a visual template, remove the revisions
-      if (JSON.parse(optionsFile).mode == 'visual_email') {
-        // from emails and reply to emails must be pre-existing in Sailthru or this will fail silently
-        let labels = JSON.parse(optionsFile).labels
-
-        options = {
-          name: templateName,
-          public_name: templateName,
-          from_name: JSON.parse(optionsFile).from_name,
-          from_email: JSON.parse(optionsFile).from_email,
-          replyto_email: JSON.parse(optionsFile).replyto_email,
-          subject: JSON.parse(optionsFile).subject,
-          sample: JSON.parse(optionsFile).sample,
-          preheader: JSON.parse(optionsFile).preheader,
-          setup: JSON.parse(optionsFile).setup,
-          labels: convertArrayToObject(labels),
-          tags: JSON.parse(optionsFile).tags,
-          is_basic: JSON.parse(optionsFile).is_basic,
-          link_params: JSON.parse(optionsFile).link_params,
-          is_link_tracking: JSON.parse(optionsFile).is_link_tracking,
-          content_html: htmlFileContent,
-          content_text: '',
-          content_json: JSON.parse(optionsFile).content_json,
-          mode: 'visual_email'
-        }
-      }
-      else {
-        options.content_html = htmlFileContent;
-      }
-    }
-    catch (err) {
-      console.log(kleur.yellow(`Options file missing. Creating default...`));
-      let defaultOptions = await promptForMissingOptions(config.defaultOptions);
-
-      defaultOptions.setup = "{" + defaultOptions.setup + "}"
-      defaultOptions.labels = convertArrayToObject(defaultOptions.labels)
-
+      let labels = JSON.parse(optionsFile).labels ? convertArrayToObject(JSON.parse(optionsFile).labels) : {}
 
       options = {
         name: templateName,
         public_name: templateName,
+        from_name: JSON.parse(optionsFile).from_name,
+        from_email: JSON.parse(optionsFile).from_email,
+        replyto_email: JSON.parse(optionsFile).replyto_email,
+        subject: JSON.parse(optionsFile).subject,
+        sample: JSON.parse(optionsFile).sample,
+        preheader: JSON.parse(optionsFile).preheader,
+        setup: JSON.parse(optionsFile).setup,
+        labels: labels,
+        tags: JSON.parse(optionsFile).tags,
+        is_basic: JSON.parse(optionsFile).is_basic,
+        link_params: JSON.parse(optionsFile).link_params,
+        is_link_tracking: JSON.parse(optionsFile).is_link_tracking,
         content_html: htmlFileContent,
-        content_text: '',
-        content_json: '',
-        mode: 'email'
+        content_text: JSON.parse(optionsFile).content_text,
+        content_json: JSON.parse(optionsFile).content_json,
+        mode: JSON.parse(optionsFile).mode
       }
-      options = { ...options, ...defaultOptions}
-      saveOptionsToFile(templateName, options);
+    }
+    catch (err) {
+      let optionsFile = fs.readFileSync(`./options/${templateName}.json`, 'utf8');
+      let labels = JSON.parse(optionsFile).labels ? convertArrayToObject(JSON.parse(optionsFile).labels) : {}
+
+      options = {
+        name: templateName,
+        public_name: templateName,
+        from_name: JSON.parse(optionsFile).from_name,
+        from_email: JSON.parse(optionsFile).from_email,
+        replyto_email: JSON.parse(optionsFile).replyto_email,
+        subject: JSON.parse(optionsFile).subject,
+        sample: JSON.parse(optionsFile).sample,
+        preheader: JSON.parse(optionsFile).preheader,
+        setup: JSON.parse(optionsFile).setup,
+        labels: labels,
+        tags: JSON.parse(optionsFile).tags,
+        is_basic: JSON.parse(optionsFile).is_basic,
+        link_params: JSON.parse(optionsFile).link_params,
+        is_link_tracking: JSON.parse(optionsFile).is_link_tracking,
+        content_html: htmlFileContent,
+        content_text: JSON.parse(optionsFile).content_text,
+        content_json: JSON.parse(optionsFile).content_json,
+        mode: JSON.parse(optionsFile).mode
+      }
+
+      if (!options) {
+        console.log(kleur.blue(fs.readFileSync(`./options/${templateName}.json`, 'utf8')))
+        console.log(kleur.yellow(`Options file missing. Creating default...`));
+        let defaultOptions = await promptForMissingOptions(config.defaultOptions);
+
+        defaultOptions.setup = "{" + defaultOptions.setup + "}"
+        defaultOptions.labels = convertArrayToObject(defaultOptions.labels)
+
+        options = {
+          name: templateName,
+          public_name: templateName,
+          content_html: htmlFileContent,
+          content_text: '',
+          content_json: '',
+          mode: 'email'
+        }
+        options = { ...options, ...defaultOptions }
+        saveOptionsToFile(templateName, options);
+      }
     }
 
     await new Promise(async (resolve, reject) => {
