@@ -6,7 +6,6 @@ templates/*
 /options/*
 options/*
 images/*
-config.js
-!/options/test.json
-!/template/test.html
 sail_i.js
+config.js
+config.js

@@ -91,7 +91,7 @@ let templateNames = [];
       case "test":
         let recipients = await ask_whichEmailToSendTo()
 
-        templateObject = await ask_whichTemplateToSend(templateInfo, 'Which template would you like to send?')
+        templateObject = await ask_whichTemplate(templateInfo, 'Which template would you like to send?')
 
         sendEmail(templateObject.name, recipients)
 
@@ -100,7 +100,7 @@ let templateNames = [];
         // adds option to pull all templates, go 'up' one in the CLI to find this option
         {templateInfo.templateNames.push("ALL TEMPLATES")}
 
-        templateObject = await ask_whichTemplateToSend(templateInfo, 'Which template would you like to pull?')
+        templateObject = await ask_whichTemplate(templateInfo, 'Which template would you like to pull?')
 
         if(templateObject.name === "ALL TEMPLATES") {
           let confirmOverwrite = await ask_confirm('WARNING: This will overwrite any existing files in the templates folder of the same name. Continue?')
@@ -144,7 +144,7 @@ let templateNames = [];
         templateInfo.templateNames.push("ALL TEMPLATES")
 
         // ask for the template to push and return any existing template info from sailthru
-        templateObject = await ask_whichTemplateToSend(templateInfo, 'These files exist in "/templates/". Which template to push?')
+        templateObject = await ask_whichTemplate(templateInfo, 'These files exist in "/templates/". Which template to push?')
 
         let overwriteConfirmation
 
@@ -161,6 +161,18 @@ let templateNames = [];
 
 
         if (templateObject.name === "ALL TEMPLATES") {
+          // confirm push of all templates
+          let confirm = await ask_confirm(`This will overwrite ALL templates in SailThru(${env}). Continue?`)
+          if (!confirm) {
+            console.log(kleur.red("Push cancelled - Exiting."));
+            process.exit(0);
+          }
+          let doubleConfirm = await ask_confirm(`Be extra careful! This will overwrite ALL templates in SailThru(${env})! Continue?`)
+          if (!doubleConfirm) {
+            console.log(kleur.red("Push cancelled - Exiting."));
+            process.exit(0);
+          }
+
           // push all templates
           templateInfo.templateNames.forEach(async templateName => {
             // don't try to push a template named "ALL TEMPLATES"
@@ -212,6 +224,33 @@ let templateNames = [];
     });
 
     return fileData.map(file => file.name);
+}
+
+async function promptForMissingOptions(defaultOptions) {
+  const missingOptions = {};
+  const questions = Object.keys(defaultOptions).map(key => ({
+    type: 'text',
+    name: key,
+    message: `Enter a value for ${key} (default: ${defaultOptions[key]}):`,
+    initial: defaultOptions[key]
+  }));
+
+  const response = await prompts(questions);
+  for (const key in response) {
+    missingOptions[key] = response[key] !== "" ? response[key] : defaultOptions[key];
+  }
+
+  return missingOptions;
+}
+
+function saveOptionsToFile(templateName, options) {
+  const optionsFilePath = `./options/${templateName}.json`;
+  fs.writeFile(optionsFilePath, JSON.stringify(options), (err) => {
+    if (err) {
+      return console.log(kleur.red(err));
+    }
+    console.log(kleur.green(`Options saved: ${optionsFilePath}`));
+  });
 }
 
   async function watchFilesForChanges(templateName) {
@@ -287,7 +326,7 @@ let templateNames = [];
     }
   }
 
-  async function ask_whichTemplateToSend(templateInfo, question) {
+  async function ask_whichTemplate(templateInfo, question) {
     let templateJson = JSON.parse(templateInfo.templateJson);
 
     let answers = await prompts({
@@ -339,7 +378,6 @@ function saveFiles(response, userChoice) {
 
     // save the file options, without the html
     const fileOptions = response;
-    // delete fileOptions.content_html;
 
     // save the options file to the /options/ folder
     const optionsFilePath = `./options/${response.name}.json`;
@@ -390,6 +428,8 @@ function saveFiles(response, userChoice) {
 }
 
 function convertArrayToObject(array) {
+  array = Array.isArray(array) ? array : [array];
+
   return array.reduce((obj, item) => {
     obj[item] = 1;
     return obj;
@@ -414,8 +454,8 @@ function convertArrayToObject(array) {
     let htmlFileContent = ''
 
     // todo: update to use promises
-    // wait for the template to be properly loaded, but only for 5 seconds
-    // not the best way to do this, but it other methods were not working
+    // waits for the template to be properly loaded, but only for 5 seconds
+    // not the best way to do this, but other methods were not working
     let timeout = Date.now() + 5000;
     while (htmlFileContent === '') {
       htmlFileContent = fs.readFileSync(`./templates/${templateName}.html`, 'utf8')
@@ -436,42 +476,75 @@ function convertArrayToObject(array) {
     }
 
     let options = {}
-
     try {
       let optionsFile = fs.readFileSync(`./options/${templateName}.json`, 'utf8');
+      let labels = JSON.parse(optionsFile).labels ? convertArrayToObject(JSON.parse(optionsFile).labels) : {}
 
-      // if the template is a visual template, remove the revisions
-      if (JSON.parse(optionsFile).mode == 'visual_email') {
-        // from emails and reply to emails must be pre-existing in Sailthru or this will fail silently
-        let labels = JSON.parse(optionsFile).labels
+      options = {
+        name: templateName,
+        public_name: templateName,
+        from_name: JSON.parse(optionsFile).from_name,
+        from_email: JSON.parse(optionsFile).from_email,
+        replyto_email: JSON.parse(optionsFile).replyto_email,
+        subject: JSON.parse(optionsFile).subject,
+        sample: JSON.parse(optionsFile).sample,
+        preheader: JSON.parse(optionsFile).preheader,
+        setup: JSON.parse(optionsFile).setup,
+        labels: labels,
+        tags: JSON.parse(optionsFile).tags,
+        is_basic: JSON.parse(optionsFile).is_basic,
+        link_params: JSON.parse(optionsFile).link_params,
+        is_link_tracking: JSON.parse(optionsFile).is_link_tracking,
+        content_html: htmlFileContent,
+        content_text: JSON.parse(optionsFile).content_text,
+        content_json: JSON.parse(optionsFile).content_json,
+        mode: JSON.parse(optionsFile).mode
+      }
+    }
+    catch (err) {
+      let optionsFile = fs.readFileSync(`./options/${templateName}.json`, 'utf8');
+      let labels = JSON.parse(optionsFile).labels ? convertArrayToObject(JSON.parse(optionsFile).labels) : {}
+
+      options = {
+        name: templateName,
+        public_name: templateName,
+        from_name: JSON.parse(optionsFile).from_name,
+        from_email: JSON.parse(optionsFile).from_email,
+        replyto_email: JSON.parse(optionsFile).replyto_email,
+        subject: JSON.parse(optionsFile).subject,
+        sample: JSON.parse(optionsFile).sample,
+        preheader: JSON.parse(optionsFile).preheader,
+        setup: JSON.parse(optionsFile).setup,
+        labels: labels,
+        tags: JSON.parse(optionsFile).tags,
+        is_basic: JSON.parse(optionsFile).is_basic,
+        link_params: JSON.parse(optionsFile).link_params,
+        is_link_tracking: JSON.parse(optionsFile).is_link_tracking,
+        content_html: htmlFileContent,
+        content_text: JSON.parse(optionsFile).content_text,
+        content_json: JSON.parse(optionsFile).content_json,
+        mode: JSON.parse(optionsFile).mode
+      }
+
+      if (!options) {
+        console.log(kleur.blue(fs.readFileSync(`./options/${templateName}.json`, 'utf8')))
+        console.log(kleur.yellow(`Options file missing. Creating default...`));
+        let defaultOptions = await promptForMissingOptions(config.defaultOptions);
+
+        defaultOptions.setup = "{" + defaultOptions.setup + "}"
+        defaultOptions.labels = convertArrayToObject(defaultOptions.labels)
 
         options = {
           name: templateName,
           public_name: templateName,
-          from_name: fromName,
-          from_email: fromEmail,
-          replyto_email: JSON.parse(optionsFile).replyto_email,
-          subject: JSON.parse(optionsFile).subject,
-          sample: JSON.parse(optionsFile).sample,
-          preheader: JSON.parse(optionsFile).preheader,
-          setup: JSON.parse(optionsFile).setup,
-          labels: convertArrayToObject(labels),
-          tags: JSON.parse(optionsFile).tags,
-          is_basic: JSON.parse(optionsFile).is_basic,
-          link_params: JSON.parse(optionsFile).link_params,
-          is_link_tracking: JSON.parse(optionsFile).is_link_tracking,
           content_html: htmlFileContent,
           content_text: '',
-          content_json: JSON.parse(optionsFile).content_json,
-          mode: 'visual_email'
+          content_json: '',
+          mode: 'email'
         }
+        options = { ...options, ...defaultOptions }
+        saveOptionsToFile(templateName, options);
       }
-      else {
-        options.content_html = htmlFileContent;
-      }
-    }
-    catch (err) {
-      options.content_html = htmlFileContent;
     }
 
     await new Promise(async (resolve, reject) => {
