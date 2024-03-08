@@ -104,7 +104,6 @@ let templateNames = [];
 
         if(templateObject.name === "ALL TEMPLATES") {
           let confirmOverwrite = await ask_confirm('WARNING: This will overwrite any existing files in the templates folder of the same name. Continue?')
-          shouldWatchFile = await ask_confirm(`Enable file watcher? (push template to SailThru as code updates)`)
 
           // get all templates
           if(confirmOverwrite){
@@ -113,7 +112,6 @@ let templateNames = [];
               if(templateName != "ALL TEMPLATES") { getTemplate(templateName) }
             });
           }
-          if (shouldWatchFile) { watchFilesForChanges(templateObject.name) }
         }
         else{
           shouldWatchFile = await ask_confirm(`Enable file watcher? (push template to SailThru as code updates)`)
